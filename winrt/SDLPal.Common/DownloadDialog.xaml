@@ -12,8 +12,9 @@
     PrimaryButtonClick="OnPrimaryButtonClick"
     MinHeight="0" MinWidth="0" Closing="OnClosing" Opened="OnOpened">
 
-    <StackPanel Orientation="Vertical">
-        <ProgressBar x:Name="pbDownload" HorizontalAlignment="Stretch" Height="10" VerticalAlignment="Top" />
+    <StackPanel x:Name="spContent" Orientation="Vertical" VerticalAlignment="Stretch">
+        <WebView x:Name="DownloadPage" NavigationStarting="OnNavigateStart" DOMContentLoaded="OnDOMContentLoaded" ScrollViewer.HorizontalScrollMode="Auto" ScrollViewer.VerticalScrollMode="Auto" />
+        <ProgressBar x:Name="pbDownload" HorizontalAlignment="Stretch" Height="10" />
         <TextBlock x:Name="tbProgress" HorizontalAlignment="Right" Text="0 / 0" />
     </StackPanel>
 </ContentDialog>

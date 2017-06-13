@@ -34,6 +34,8 @@ using namespace Windows::Web::Http;
 // https://go.microsoft.com/fwlink/?LinkId=234238 上介绍了“内容对话框”项模板
 
 static const uint32_t _buffer_size = 65536;
+static Platform::String^ const _url = "http://pal5q.baiyou100.com/pal5/download/98xjrq.html";
+static const wchar_t _postfix[] = L"/Pal98rqp.zip";
 
 struct zip_file
 {
@@ -50,6 +52,9 @@ SDLPal::DownloadDialog::DownloadDialog(Platform::String^ link, Windows::Applicat
 	InitializeComponent();
 
 	this->IsSecondaryButtonEnabled = false;
+	pbDownload->Visibility = Windows::UI::Xaml::Visibility::Collapsed;
+	tbProgress->Visibility = Windows::UI::Xaml::Visibility::Collapsed;
+	DownloadPage->Visibility = Windows::UI::Xaml::Visibility::Visible;
 }
 
 Platform::String^ SDLPal::DownloadDialog::FormatProgress()
@@ -85,6 +90,10 @@ void SDLPal::DownloadDialog::OnClosing(Windows::UI::Xaml::Controls::ContentDialo
 
 void SDLPal::DownloadDialog::OnOpened(Windows::UI::Xaml::Controls::ContentDialog^ sender, Windows::UI::Xaml::Controls::ContentDialogOpenedEventArgs^ args)
 {
+	DownloadPage->Width = spContent->ActualWidth;
+	DownloadPage->Height = 500;
+	DownloadPage->Navigate(ref new Uri(_url));
+	return;
 	concurrency::create_task([this]() {
 		Exception^ ex = nullptr;
 		auto client = ref new HttpClient();
@@ -258,4 +267,32 @@ void SDLPal::DownloadDialog::OnOpened(Windows::UI::Xaml::Controls::ContentDialog
 			Hide();
 		}));
 	});
+}
+
+
+void SDLPal::DownloadDialog::OnNavigateStart(Windows::UI::Xaml::Controls::WebView^ sender, Windows::UI::Xaml::Controls::WebViewNavigationStartingEventArgs^ args)
+{
+	auto url = args->Uri->RawUri;
+	args->Cancel = (Platform::String::CompareOrdinal(url, _url) != 0);
+
+	if (url->Length() >= 12 && _wcsicmp(url->Data() + url->Length() - _countof(_postfix), _postfix) == 0)
+	{
+
+	}
+}
+
+
+void SDLPal::DownloadDialog::OnDOMContentLoaded(Windows::UI::Xaml::Controls::WebView^ sender, Windows::UI::Xaml::Controls::WebViewDOMContentLoadedEventArgs^ args)
+{
+	auto params = ref new Platform::Collections::Vector<String^>(1, ref new String(LR"rs(
+	var elems = document.getElementsByTagName('a');
+	 for (var i = 0; i < elems.length; i++)
+	 {
+		if (elems[i].href.indexOf('#') === -1)
+		{
+			elems[i].target = /\/Pal98rqp\.zip$/i.test(elems[i].href) ? '' : '_blank';
+		}
+	 }
+)rs"));
+	sender->InvokeScriptAsync(ref new String(L"eval"), params);
 }

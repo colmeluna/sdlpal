@@ -252,6 +252,7 @@ void SDLPal::MainPage::SetPath(Windows::Storage::StorageFolder^ folder)
 	{
 		tbGamePath->Text = folder->Path;
 		tbGamePath->Tag = folder;
+		btnDownloadGame->IsEnabled = true;
 	}
 }
 
@@ -379,7 +380,10 @@ void SDLPal::MainPage::btnDownloadGame_Click(Platform::Object^ sender, Windows::
 			{
 				auto file = AWait(folder->CreateFileAsync("pal98.zip", Windows::Storage::CreationCollisionOption::ReplaceExisting), hEvent);
 				auto stream = AWait(file->OpenAsync(Windows::Storage::FileAccessMode::ReadWrite), hEvent);
-				concurrency::create_task((ref new DownloadDialog(link, m_resLdr, folder, stream))->ShowAsync()).then(
+				auto dlg = ref new DownloadDialog(link, m_resLdr, folder, stream);
+				dlg->MinWidth = ActualWidth;
+				dlg->MinHeight = ActualHeight;
+				concurrency::create_task(dlg->ShowAsync()).then(
 					[this, file, stream, hEvent](ContentDialogResult result) {
 					delete stream;
 					AWait(file->DeleteAsync(), hEvent);
