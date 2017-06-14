@@ -18,6 +18,7 @@ using namespace SDLPal;
 using namespace Platform;
 using namespace Windows::Foundation;
 using namespace Windows::Foundation::Collections;
+using namespace Windows::UI::Core;
 using namespace Windows::UI::Popups;
 using namespace Windows::UI::Xaml;
 using namespace Windows::UI::Xaml::Controls;
@@ -34,6 +35,7 @@ static Platform::String^ log_file_exts[] = { ".log" };
 MainPage^ MainPage::Current = nullptr;
 
 MainPage::MainPage()
+	: m_dlg(nullptr)
 {
 	InitializeComponent();
 
@@ -380,11 +382,11 @@ void SDLPal::MainPage::btnDownloadGame_Click(Platform::Object^ sender, Windows::
 			{
 				auto file = AWait(folder->CreateFileAsync("pal98.zip", Windows::Storage::CreationCollisionOption::ReplaceExisting), hEvent);
 				auto stream = AWait(file->OpenAsync(Windows::Storage::FileAccessMode::ReadWrite), hEvent);
-				auto dlg = ref new DownloadDialog(link, m_resLdr, folder, stream);
-				dlg->MinWidth = ActualWidth;
-				dlg->MinHeight = ActualHeight;
-				concurrency::create_task(dlg->ShowAsync()).then(
-					[this, file, stream, hEvent](ContentDialogResult result) {
+				concurrency::create_task(this->Dispatcher->RunAsync(CoreDispatcherPriority::Normal, ref new DispatchedHandler([this, folder, file, stream]() {
+					m_dlg = ref new DownloadDialog(m_resLdr, folder, stream, ActualWidth, ActualHeight);
+				}))).then([this]()->IAsyncOperation<ContentDialogResult>^{
+					return m_dlg->ShowAsync();
+				}).then([this, file, stream, hEvent](ContentDialogResult result) {
 					delete stream;
 					AWait(file->DeleteAsync(), hEvent);
 					delete file;
@@ -398,4 +400,16 @@ void SDLPal::MainPage::btnDownloadGame_Click(Platform::Object^ sender, Windows::
 			}
 		}
 	});
+}
+
+
+void SDLPal::MainPage::OnSizeChanged(Platform::Object^ sender, Windows::UI::Xaml::SizeChangedEventArgs^ e)
+{
+	if (m_dlg)
+	{
+		m_dlg->MaxWidth = e->NewSize.Width;
+		if (m_dlg->MaxHeight == e->PreviousSize.Height)
+			m_dlg->MaxHeight = e->NewSize.Height;
+		m_dlg->UpdateLayout();
+	}
 }

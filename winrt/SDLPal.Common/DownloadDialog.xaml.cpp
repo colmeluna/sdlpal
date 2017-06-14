@@ -47,12 +47,16 @@ struct zip_file
 	zip_file(IStream* s) : stream(s), hr(S_OK), cbBytes(0) {}
 };
 
-SDLPal::DownloadDialog::DownloadDialog(Platform::String^ link, Windows::ApplicationModel::Resources::ResourceLoader^ ldr, Windows::Storage::StorageFolder^ folder, Windows::Storage::Streams::IRandomAccessStream^ stream)
-	: m_link(link), m_stream(stream), m_Closable(false), m_InitialPhase(true), m_totalBytes(0), m_resLdr(ldr), m_folder(folder)
+SDLPal::DownloadDialog::DownloadDialog(Windows::ApplicationModel::Resources::ResourceLoader^ ldr, StorageFolder^ folder, IRandomAccessStream^ stream, double w, double h)
+	: m_stream(stream), m_Closable(false), m_InitialPhase(true), m_totalBytes(0), m_resLdr(ldr), m_folder(folder), m_width(w), m_height(h)
 {
 	InitializeComponent();
 
 	this->IsSecondaryButtonEnabled = false;
+	this->MaxWidth = w;
+	this->MaxHeight = h;
+	pbDownload->Visibility = Windows::UI::Xaml::Visibility::Collapsed;
+	tbProgress->Visibility = Windows::UI::Xaml::Visibility::Collapsed;
 }
 
 Platform::String^ SDLPal::DownloadDialog::FormatProgress()
@@ -88,11 +92,9 @@ void SDLPal::DownloadDialog::OnClosing(Windows::UI::Xaml::Controls::ContentDialo
 
 void SDLPal::DownloadDialog::OnOpened(Windows::UI::Xaml::Controls::ContentDialog^ sender, Windows::UI::Xaml::Controls::ContentDialogOpenedEventArgs^ args)
 {
-	pbDownload->Visibility = Windows::UI::Xaml::Visibility::Collapsed;
-	tbProgress->Visibility = Windows::UI::Xaml::Visibility::Collapsed;
-	DownloadPage->Visibility = Windows::UI::Xaml::Visibility::Visible;
-	DownloadPage->Width = spContent->ActualWidth;
-	DownloadPage->Height = 500;
+	DownloadPage->Width = m_width - 48;
+	DownloadPage->Height = m_height - 128;
+	UpdateLayout();
 	DownloadPage->Navigate(ref new Uri(_url));
 }
 
@@ -102,23 +104,21 @@ void SDLPal::DownloadDialog::OnNavigateStart(Windows::UI::Xaml::Controls::WebVie
 	auto url = args->Uri->RawUri;
 	args->Cancel = (Platform::String::CompareOrdinal(url, _url) != 0);
 
-	if (url->Length() >= 12 && _wcsicmp(url->Data() + url->Length() - _countof(_postfix), _postfix) == 0)
+	if (url->Length() >= _countof(_postfix) - 1 && _wcsicmp(url->Data() + url->Length() - (_countof(_postfix) - 1), _postfix) == 0)
 	{
+		DownloadPage->Visibility = Windows::UI::Xaml::Visibility::Collapsed;
 		pbDownload->Visibility = Windows::UI::Xaml::Visibility::Visible;
 		tbProgress->Visibility = Windows::UI::Xaml::Visibility::Visible;
-		DownloadPage->Visibility = Windows::UI::Xaml::Visibility::Collapsed;
-		DownloadPage->Width = 0;
-		DownloadPage->Height = 0;
-		this->MinWidth = 0;
-		this->MinHeight = 0;
-		this->Title = m_resLdr->GetString("Downloading.Title");
+		this->MaxHeight -= DownloadPage->ActualHeight - 48;
+		this->Title = m_title;
+		this->UpdateLayout();
 		
-		concurrency::create_task([this]() {
+		concurrency::create_task([this, url]() {
 			Exception^ ex = nullptr;
 			auto client = ref new HttpClient();
 			try
 			{
-				concurrency::create_task(client->GetAsync(ref new Uri(m_link), HttpCompletionOption::ResponseHeadersRead)).then(
+				concurrency::create_task(client->GetAsync(ref new Uri(url), HttpCompletionOption::ResponseHeadersRead)).then(
 					[this](HttpResponseMessage^ response)->IAsyncOperationWithProgress<IInputStream^, uint64_t>^ {
 					response->EnsureSuccessStatusCode();
 
@@ -292,15 +292,38 @@ void SDLPal::DownloadDialog::OnNavigateStart(Windows::UI::Xaml::Controls::WebVie
 
 void SDLPal::DownloadDialog::OnDOMContentLoaded(Windows::UI::Xaml::Controls::WebView^ sender, Windows::UI::Xaml::Controls::WebViewDOMContentLoadedEventArgs^ args)
 {
+	m_title = this->Title;
 	this->Title = sender->DocumentTitle;
 	sender->InvokeScriptAsync(ref new String(L"eval"), ref new Vector<String^>(1, ref new String(LR"rs(
 	var elems = document.getElementsByTagName('a');
-	 for (var i = 0; i < elems.length; i++)
-	 {
+	for (var i = 0; i < elems.length; i++)
+	{
 		if (elems[i].href.indexOf('#') === -1)
 		{
-			elems[i].target = /\/Pal98rqp\.zip$/i.test(elems[i].href) ? '' : '_blank';
+			if (/\/Pal98rqp\.zip$/i.test(elems[i].href))
+			{
+				elems[i].target = '';
+				elems[i].focus();
+				var r = elems[i].getBoundingClientRect();
+				var y = (r.top + r.bottom - window.innerHeight) / 2 + window.scrollY;
+				var x = (r.left + r.right - window.innerWidth) / 2 + window.scrollX;
+				window.scroll(x, y);
+			}
+			else
+			{
+				elems[i].target = '_blank';
+			}
 		}
-	 }
+	}
 )rs")));
+}
+
+
+void SDLPal::DownloadDialog::OnSizeChanged(Platform::Object^ sender, Windows::UI::Xaml::SizeChangedEventArgs^ e)
+{
+	if (DownloadPage->Visibility == Windows::UI::Xaml::Visibility::Visible)
+	{
+		DownloadPage->Width = e->NewSize.Width - 48;
+		DownloadPage->Height = e->NewSize.Height - 128;
+	}
 }
